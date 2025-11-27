@@ -6,17 +6,193 @@
 
 ## アーキテクチャ: 4 層構造のマルチモジュール
 
+### モジュール構成とディレクトリ構造
+
 ```
-atrs/                      # 親 POM (TERASOLUNA 5.10.0)
-├── atrs-env/              # 環境設定層 - データソース、JMS、ログ設定
-├── atrs-domain/           # ドメイン層 - ビジネスロジック、リポジトリ (MyBatis)
-├── atrs-web/              # プレゼンテーション層 - MVC + REST API
-└── atrs-initdb/           # DB 初期化 - 120 日分のフライトデータ生成
+atrs/                                    # 親 POM (TERASOLUNA 5.10.0)
+├── pom.xml                              # 親POM: 共通依存関係・プラグイン管理
+├── atrs-env/                            # 環境設定層 - データソース、JMS、ログ設定
+│   ├── pom.xml                          # 環境設定依存関係
+│   └── src/main/
+│       ├── java/jp/co/ntt/atrs/domain/
+│       │   └── common/
+│       │       └── logging/             # ログ出力設定
+│       │           ├── LogMessages.java
+│       │           └── MessageFormatter.java
+│       └── resources/
+│           ├── logback.xml              # Logback設定 (ログレベル、出力先)
+│           └── META-INF/spring/
+│               ├── atrs-env.xml         # Spring設定: データソース、トランザクション
+│               ├── atrs-infra.properties # DB接続情報 (URL, user, password)
+│               └── atrs-codelist.xml    # コードリスト定義 (空港、運賃種別など)
+│
+├── atrs-domain/                         # ドメイン層 - ビジネスロジック、リポジトリ
+│   ├── pom.xml                          # ドメイン依存関係 (MyBatis, JMS, テスト)
+│   └── src/
+│       ├── main/
+│       │   ├── java/jp/co/ntt/atrs/domain/
+│       │   │   ├── common/              # 共通機能
+│       │   │   │   ├── codelist/        # コードリスト (JdbcCodeList)
+│       │   │   │   ├── exception/       # 例外クラス (AtrsBusinessException)
+│       │   │   │   ├── masterdata/      # マスタデータプロバイダー
+│       │   │   │   │   ├── RouteProvider.java
+│       │   │   │   │   ├── FlightMasterProvider.java
+│       │   │   │   │   ├── FareTypeProvider.java
+│       │   │   │   │   └── BoardingClassProvider.java
+│       │   │   │   ├── message/         # メッセージ定義 (エラーコードenum)
+│       │   │   │   ├── security/        # セキュリティ (UserDetails実装)
+│       │   │   │   ├── util/            # ユーティリティ (DateTimeUtil, StringUtil)
+│       │   │   │   └── validate/        # カスタムバリデーター
+│       │   │   ├── model/               # ドメインモデル (エンティティ)
+│       │   │   │   ├── Flight.java      # フライト情報
+│       │   │   │   ├── FlightMaster.java # フライトマスタ
+│       │   │   │   ├── Route.java       # 路線
+│       │   │   │   ├── Airport.java     # 空港
+│       │   │   │   ├── Member.java      # 会員
+│       │   │   │   ├── Reservation.java # 予約
+│       │   │   │   ├── BoardingClass.java # 搭乗クラス (N:普通席, S:特別席)
+│       │   │   │   ├── FareType.java    # 運賃種別 (OW:片道, RT:往復)
+│       │   │   │   └── *Cd.java         # Enum型コード (BoardingClassCd, FareTypeCd)
+│       │   │   ├── repository/          # MyBatis リポジトリ
+│       │   │   │   ├── flight/
+│       │   │   │   │   └── FlightRepository.java # フライト検索リポジトリ
+│       │   │   │   ├── member/
+│       │   │   │   │   └── MemberRepository.java
+│       │   │   │   └── reservation/
+│       │   │   │       ├── ReservationRepository.java
+│       │   │   │       └── ReserveFlightRepository.java
+│       │   │   └── service/             # ビジネスロジック (機能別パッケージ)
+│       │   │       ├── a0/              # 会員共通サービス
+│       │   │       │   ├── MembershipSharedService.java
+│       │   │       │   └── MembershipSharedServiceImpl.java
+│       │   │       ├── a1/              # 認証ログインサービス
+│       │   │       │   ├── AuthLoginService.java
+│       │   │       │   └── AuthLoginServiceImpl.java
+│       │   │       ├── b0/              # チケット共通サービス
+│       │   │       │   ├── TicketSharedService.java
+│       │   │       │   └── TicketSharedServiceImpl.java
+│       │   │       ├── b1/              # 空席照会サービス
+│       │   │       │   ├── TicketSearchService.java
+│       │   │       │   ├── TicketSearchServiceImpl.java
+│       │   │       │   ├── TicketSearchCriteriaDto.java # 検索条件DTO
+│       │   │       │   ├── FlightVacantInfoDto.java     # 検索結果DTO
+│       │   │       │   └── FareTypeVacantInfoDto.java   # 運賃種別情報DTO
+│       │   │       ├── b2/              # チケット予約サービス
+│       │   │       │   ├── TicketReserveService.java
+│       │   │       │   ├── TicketReserveServiceImpl.java
+│       │   │       │   └── TicketReserveDto.java
+│       │   │       ├── c1/              # 会員登録サービス
+│       │   │       │   ├── MemberRegisterService.java
+│       │   │       │   └── MemberRegisterServiceImpl.java
+│       │   │       └── d1/              # 予約履歴レポートサービス
+│       │   │           ├── ReservationHistoryReportService.java
+│       │   │           └── ReservationHistoryReportServiceImpl.java
+│       │   └── resources/
+│       │       ├── META-INF/spring/
+│       │       │   └── atrs.properties  # ドメイン層プロパティ
+│       │       └── jp/co/ntt/atrs/domain/repository/
+│       │           ├── flight/
+│       │           │   └── FlightRepository.xml # MyBatis SQLマッパー
+│       │           ├── member/
+│       │           │   └── MemberRepository.xml
+│       │           └── reservation/
+│       │               ├── ReservationRepository.xml
+│       │               └── ReserveFlightRepository.xml
+│       └── test/
+│           └── java/jp/co/ntt/atrs/domain/
+│               └── service/
+│                   └── b1/
+│                       └── TicketSearchServiceImplTest.java # ✅ 単体テスト (14ケース、93%カバレッジ)
+│
+├── atrs-web/                            # プレゼンテーション層 - MVC + REST API
+│   ├── pom.xml                          # Web依存関係 (Spring MVC, Security, MapStruct)
+│   └── src/main/
+│       ├── java/jp/co/ntt/atrs/
+│       │   ├── app/                     # Spring MVC コントローラー (JSPビュー)
+│       │   │   ├── a1/                  # ログイン機能
+│       │   │   │   ├── AuthLoginController.java
+│       │   │   │   └── LoginForm.java
+│       │   │   ├── b1/                  # チケット検索機能
+│       │   │   │   ├── TicketSearchController.java
+│       │   │   │   ├── TicketSearchHelper.java   # ビジネスロジック補助
+│       │   │   │   ├── TicketSearchForm.java     # フォームオブジェクト
+│       │   │   │   └── B1Mapper.java             # MapStruct DTO変換
+│       │   │   ├── b2/                  # チケット予約機能
+│       │   │   │   ├── TicketReserveController.java
+│       │   │   │   └── TicketReserveForm.java
+│       │   │   ├── c1/                  # 会員登録機能
+│       │   │   │   ├── MemberRegisterController.java
+│       │   │   │   └── MemberRegisterForm.java
+│       │   │   └── c2/                  # 会員情報更新機能
+│       │   │       ├── MemberUpdateController.java
+│       │   │       └── MemberUpdateForm.java
+│       │   ├── api/                     # REST API コントローラー (@RestController)
+│       │   │   ├── flight/              # フライト検索API
+│       │   │   │   ├── FlightRestController.java
+│       │   │   │   ├── FlightMapper.java         # MapStruct変換
+│       │   │   │   ├── FlightResource.java       # レスポンスDTO
+│       │   │   │   └── FlightSearchQuery.java    # リクエストDTO
+│       │   │   └── ticket/              # チケット予約API
+│       │   │       ├── TicketRestController.java
+│       │   │       ├── TicketMapper.java
+│       │   │       └── TicketResource.java
+│       │   ├── config/                  # Spring設定クラス
+│       │   │   ├── app/
+│       │   │   │   ├── ApplicationContextConfig.java   # アプリケーション全体設定
+│       │   │   │   └── AtrsInfrastructureConfig.java   # インフラ設定 (JMS等)
+│       │   │   └── web/
+│       │   │       ├── SpringMvcConfig.java            # Spring MVC設定
+│       │   │       └── SpringSecurityConfig.java       # Spring Security設定
+│       │   └── listener/
+│       │       └── SetupListener.java   # アプリケーション起動時処理
+│       ├── resources/
+│       │   ├── ValidationMessages.properties # Bean Validationメッセージ
+│       │   └── i18n/
+│       │       ├── atrs-messages_ja.properties # 画面メッセージ (日本語)
+│       │       └── atrs-fields_ja.properties   # フィールド名定義 (日本語)
+│       └── webapp/
+│           ├── resources/               # 静的リソース
+│           │   ├── css/                 # スタイルシート
+│           │   ├── js/                  # JavaScript
+│           │   ├── img/                 # 画像
+│           │   └── vendor/              # サードパーティライブラリ (Bootstrap等)
+│           └── WEB-INF/
+│               ├── views/               # JSPビュー
+│               │   ├── a1/              # ログイン画面
+│               │   ├── b1/              # チケット検索画面
+│               │   ├── b2/              # チケット予約画面
+│               │   ├── c1/              # 会員登録画面
+│               │   ├── c2/              # 会員情報更新画面
+│               │   └── common/          # 共通JSP (ヘッダー、フッター、エラーページ)
+│               └── web.xml              # サーブレット設定、エラーページマッピング
+│
+└── atrs-initdb/                         # DB 初期化 - テストデータ生成
+    ├── pom.xml                          # SQL Mavenプラグイン設定
+    └── src/sqls/integration-test-postgres/
+        ├── 00000_drop_all_tables.sql    # テーブル削除
+        ├── 00100_create_all_tables.sql  # DDL: テーブル作成
+        ├── 00200_insert_fixed_value.sql # DML: 固定マスタデータ
+        ├── 00210_insert_route.sql       # DML: 路線マスタ (20路線)
+        ├── 00220_insert_flight_master.sql # DML: フライトマスタ (126便)
+        ├── 00230_insert_member.sql      # DML: 会員テストデータ
+        ├── 00240_insert_peak_time.sql   # DML: ピーク時期設定 (16期間)
+        └── 00250_insert_flight.sql      # DML: フライトデータ (実行日+120日分)
 ```
 
-**依存関係の流れ**: `atrs-web` → `atrs-domain` → `atrs-env` (各層は下位層に依存)
+**依存関係の流れ**: 
+```
+atrs-web (プレゼンテーション層)
+  ↓ 依存
+atrs-domain (ドメイン層)
+  ↓ 依存
+atrs-env (環境設定層)
+```
 
-**重要**: 各モジュールには固有の `pom.xml` があり、親 POM は共通依存関係とプラグイン設定を管理。
+**重要な設計原則**:
+1. **レイヤー分離**: 各層は下位層のみに依存、上位層への依存は禁止
+2. **機能別パッケージ**: サービス層は `[a-z][0-9]` で機能を分離
+3. **DTO分離**: サービスは独自のDTO (例: `TicketSearchCriteriaDto`) を持ち、モデルとフォームを直接やり取りしない
+4. **Interface/Impl分離**: サービス・リポジトリはインターフェースと実装を分離
 
 ## ビルド & 起動のワークフロー
 
@@ -39,48 +215,187 @@ mvn cargo:run -P default -f atrs-web/pom.xml
 
 ## コーディング規約: パッケージ命名パターン
 
-### ドメイン層 (`atrs-domain`)
+### 機能別パッケージ命名規則
 
-```
-jp.co.ntt.atrs.domain/
-├── service/
-│   ├── a0/  # 会員共通サービス (MembershipSharedService)
-│   ├── a1/  # 認証ログインサービス (AuthLoginService)
-│   ├── b0/  # チケット共通サービス (TicketSharedService)
-│   ├── b1/  # 空席照会サービス (TicketSearchService)
-│   ├── b2/  # チケット予約サービス (TicketReserveService)
-│   ├── c1/  # 会員登録サービス (MemberRegisterService)
-│   └── d1/  # 予約履歴レポートサービス (ReservationHistoryReportService)
-├── repository/  # MyBatis リポジトリインターフェース
-│   ├── flight/  # FlightRepository + FlightRepository.xml
-│   ├── member/
-│   └── reservation/
-└── model/       # ドメインモデル (Flight, Route, Member など)
-```
+**パターン**: `[a-z][0-9]` で機能を識別 (例: `b1` = チケット検索、`c2` = 会員情報更新)
 
-**パターン**: サービスは機能別に `[a-z][0-9]` パッケージで分離 (例: `b1` = チケット検索機能)
+| パッケージ | 機能名 | 主要クラス | 説明 |
+|----------|--------|----------|------|
+| **a0** | 会員共通 | MembershipSharedService | 会員関連の共通処理 (認証、権限チェック) |
+| **a1** | ログイン | AuthLoginService, AuthLoginController | 認証・ログイン処理 |
+| **b0** | チケット共通 | TicketSharedService | チケット関連共通処理 (運賃計算、空席検証) |
+| **b1** | 空席照会 | TicketSearchService, TicketSearchController | フライト検索・空席照会 |
+| **b2** | チケット予約 | TicketReserveService, TicketReserveController | チケット予約・購入処理 |
+| **c1** | 会員登録 | MemberRegisterService, MemberRegisterController | 新規会員登録 |
+| **c2** | 会員情報更新 | MemberUpdateService, MemberUpdateController | 会員情報変更 |
+| **d1** | 予約履歴 | ReservationHistoryReportService | 予約履歴レポート生成 |
 
-### Web 層 (`atrs-web`)
+### ドメイン層のクラス命名パターン
 
-```
-jp.co.ntt.atrs/
-├── app/         # Spring MVC コントローラー (JSP ビュー)
-│   ├── a1/      # AuthLoginController (ログイン画面)
-│   ├── b1/      # TicketSearchController + TicketSearchHelper + B1Mapper
-│   └── c2/      # MemberUpdateController
-├── api/         # REST API コントローラー (@RestController)
-│   ├── flight/  # FlightRestController + FlightMapper (MapStruct)
-│   └── ticket/  # TicketRestController + TicketMapper
-└── config/
-    ├── app/     # ApplicationContextConfig (Spring 設定)
-    └── web/     # SpringMvcConfig (MVC 設定)
+#### サービス層 (`atrs-domain/src/main/java/.../service/`)
+
+```java
+// パターン1: ビジネスロジック実装
+{機能パッケージ}/
+├── {機能名}Service.java          // インターフェース
+├── {機能名}ServiceImpl.java      // 実装クラス (@Service)
+├── {機能名}CriteriaDto.java      // 入力DTO (検索条件など)
+└── {機能名}ResultDto.java         // 出力DTO (検索結果など)
+
+// 例: チケット検索 (b1)
+b1/
+├── TicketSearchService.java
+├── TicketSearchServiceImpl.java
+├── TicketSearchCriteriaDto.java
+└── FlightVacantInfoDto.java
 ```
 
-**パターン**: 
-- `app/` = JSP ビュー用 MVC コントローラー + Helper + Mapper (MapStruct)
-- `api/` = JSON REST API 専用 (@RestController)
-- **Helper クラス**: コントローラーのビジネスロジック補助 (例: `TicketSearchHelper`)
-- **MapStruct マッパー**: `@Mapper(componentModel = "spring")` で DTO ↔ ドメインモデル変換
+**命名規則**:
+- サービスインターフェース: `{機能名}Service`
+- サービス実装: `{機能名}ServiceImpl` (必ず`Impl`サフィックス)
+- DTO: `{用途}{型名}Dto` (例: `TicketSearchCriteriaDto`, `FlightVacantInfoDto`)
+
+#### リポジトリ層 (`atrs-domain/src/main/java/.../repository/`)
+
+```java
+// パターン2: データアクセス (MyBatis)
+{エンティティ名小文字}/
+└── {エンティティ名}Repository.java  // インターフェース (@Repository不要)
+
+// 対応するXMLマッパー: src/main/resources/.../repository/{エンティティ名小文字}/{エンティティ名}Repository.xml
+
+// 例: フライトリポジトリ
+flight/
+└── FlightRepository.java           // Java
+flight/
+└── FlightRepository.xml            // XML (resources下)
+```
+
+**XMLマッパーの重要ルール**:
+```xml
+<mapper namespace="jp.co.ntt.atrs.domain.repository.flight.FlightRepository">
+  <!-- namespaceはJavaインターフェースの完全修飾名と完全一致必須 -->
+  <select id="findByVacantSeatSearchCriteria" resultMap="flight-map">
+    <!-- idはインターフェースのメソッド名と完全一致必須 -->
+  </select>
+</mapper>
+```
+
+#### モデル層 (`atrs-domain/src/main/java/.../model/`)
+
+```java
+// パターン3: ドメインモデル (エンティティ)
+{エンティティ名}.java              // テーブル対応エンティティ
+{エンティティ名}Cd.java            // Enum型コード定義
+
+// 例:
+Flight.java           // flightテーブル
+FlightMaster.java     // flight_masterテーブル
+BoardingClassCd.java  // 搭乗クラスコード enum (N, S)
+FareTypeCd.java       // 運賃種別コード enum (OW, RT)
+```
+
+**Enum型コードの実装パターン**:
+```java
+public enum BoardingClassCd implements CodeListItem {
+    N("N"),  // 普通席 (Normal)
+    S("S");  // 特別席 (Special)
+    
+    private final String code;
+    
+    private BoardingClassCd(String code) {
+        this.code = code;
+    }
+    
+    @Override
+    public String getCodeValue() {
+        return code;
+    }
+}
+```
+
+### Web 層のクラス命名パターン
+
+#### MVC コントローラー (`atrs-web/src/main/java/.../app/`)
+
+```java
+// パターン4: Spring MVC (JSPビュー)
+{機能パッケージ}/
+├── {機能名}Controller.java        // コントローラー (@Controller)
+├── {機能名}Helper.java            // ビジネスロジック補助
+├── {機能名}Form.java              // フォームオブジェクト (@ModelAttribute)
+└── {大文字パッケージ名}Mapper.java  // MapStruct DTO変換
+
+// 例: チケット検索 (b1)
+b1/
+├── TicketSearchController.java    // @Controller
+├── TicketSearchHelper.java        // @Component
+├── TicketSearchForm.java          // フォーム
+└── B1Mapper.java                  // @Mapper(componentModel = "spring")
+```
+
+**コントローラーの責務**:
+- `Controller`: HTTPリクエスト処理、画面遷移制御のみ
+- `Helper`: 画面特有のビジネスロジック (リスト変換、ページング等)
+- `Mapper` (MapStruct): DTO変換専用
+
+#### REST API コントローラー (`atrs-web/src/main/java/.../api/`)
+
+```java
+// パターン5: REST API
+{リソース名}/
+├── {リソース名}RestController.java  // @RestController
+├── {リソース名}Mapper.java          // MapStruct変換
+├── {リソース名}Resource.java        // レスポンスDTO
+└── {リソース名}Query.java           // リクエストDTO
+
+// 例: フライトAPI
+flight/
+├── FlightRestController.java
+├── FlightMapper.java
+├── FlightResource.java             // JSON出力
+└── FlightSearchQuery.java          // クエリパラメータ
+```
+
+**REST APIの命名規則**:
+- コントローラー: `{リソース名}RestController` (必ず`RestController`サフィックス)
+- レスポンスDTO: `{リソース名}Resource` (リクエストと区別)
+- リクエストDTO: `{リソース名}Query` または `{リソース名}Request`
+
+### JSPビューのパス規則 (`atrs-web/src/main/webapp/WEB-INF/views/`)
+
+```
+views/
+├── {機能パッケージ}/
+│   ├── {画面名}.jsp              // メイン画面
+│   └── {画面名}Complete.jsp      // 完了画面
+└── common/
+    ├── include.jsp               # 共通インクルード
+    ├── header.jsp                # ヘッダー
+    ├── footer.jsp                # フッター
+    └── error/
+        ├── systemError.jsp       # システムエラー画面
+        └── businessError.jsp     # ビジネスエラー画面
+
+// 例: チケット検索画面
+b1/
+├── search.jsp                    # 検索画面
+├── select.jsp                    # 選択画面
+└── searchComplete.jsp            # 検索結果画面
+```
+
+**ビューリゾルバー設定** (`SpringMvcConfig.java`):
+```java
+@Bean
+public InternalResourceViewResolver viewResolver() {
+    InternalResourceViewResolver resolver = new InternalResourceViewResolver();
+    resolver.setPrefix("/WEB-INF/views/");
+    resolver.setSuffix(".jsp");
+    return resolver;
+}
+
+// コントローラーで "b1/search" を返すと /WEB-INF/views/b1/search.jsp が表示される
+```
 
 ## データアクセス: MyBatis パターン
 
