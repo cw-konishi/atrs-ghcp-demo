@@ -115,12 +115,16 @@ mvn sql:execute -f atrs-initdb/pom.xml
 ```
 
 このコマンドにより、以下のデータが投入されます:
-- 空港マスタ
+- 空港マスタ (20空港)
 - 路線マスタ (20路線)
 - フライトマスタ (126便)
 - 会員情報
 - ピーク時期設定 (16期間)
 - 搭乗クラス、運賃タイプなど
+
+**重要**: フライトデータは**実行日から120日間**のデータが生成されます。
+- 例: 2025年11月27日実行 → 2025年11月27日〜2026年3月27日のフライトが投入されます
+- 過去のデータしかない場合は、このコマンドを再実行して最新データに更新してください
 
 ### 5. アプリケーションのビルドと起動
 
@@ -209,6 +213,56 @@ atrs/
 
 詳細は `atrs-initdb/src/sqls/integration-test-postgres/00230_insert_member.sql` を参照してください。
 
+## 動作確認用のフライト検索
+
+### 検索可能なフライト日付範囲
+
+データベース初期化後、**実行日から120日間**のフライトデータが利用可能です。
+
+```powershell
+# フライトの日付範囲を確認
+psql -U postgres -d atrs -c "SELECT MIN(departure_date) as 最初のフライト, MAX(departure_date) as 最後のフライト, COUNT(*) as 総フライト数 FROM flight;"
+```
+
+### 利用可能な主要空港
+
+| 空港コード | 空港名 |
+|-----------|--------|
+| HND | 東京(羽田) |
+| ITM | 大阪(伊丹) |
+| KIX | 大阪(関西) |
+| FUK | 福岡 |
+| HKD | 函館 |
+
+全20空港の一覧は以下のコマンドで確認できます:
+
+```powershell
+psql -U postgres -d atrs -c "SELECT airport_cd, airport_name FROM airport ORDER BY airport_cd;"
+```
+
+### フライト検索の例
+
+#### Web UI
+<http://localhost:8080/atrs/> にアクセスし、以下の条件で検索:
+
+- **出発空港**: HND (羽田)
+- **到着空港**: ITM (伊丹)
+- **搭乗日**: 今日から120日以内の任意の日付
+- **フライトタイプ**: 往復(RT) または 片道(OW)
+
+#### REST API
+```bash
+curl "http://localhost:8080/atrs/api/v1/flight?depAirportCd=HND&arrAirportCd=ITM&depDate=2025-11-27&flightType=RT"
+```
+
+### フライトデータの再投入
+
+検索しても結果が出ない場合、フライトデータが古い可能性があります。以下のコマンドで最新データに更新してください:
+
+```powershell
+mvn sql:execute -f atrs-initdb/pom.xml
+```
+
 ## トラブルシューティング
 
 ### ポート8080が既に使用されている
@@ -224,9 +278,28 @@ atrs/
 ### データベース接続エラー
 
 以下を確認してください:
+
 1. PostgreSQLサービスが起動しているか
 2. `atrs`データベースが作成されているか
 3. `atrs-env/src/main/resources/META-INF/spring/atrs-infra.properties`の接続設定が正しいか
+
+### フライト検索で結果が出ない
+
+以下を確認してください:
+
+1. **フライトデータの日付範囲を確認**:
+   ```powershell
+   psql -U postgres -d atrs -c "SELECT MIN(departure_date), MAX(departure_date) FROM flight;"
+   ```
+
+2. **データが古い場合は再投入**:
+   ```powershell
+   mvn sql:execute -f atrs-initdb/pom.xml
+   ```
+
+3. **空港コードが正しいか確認** (例: HND, ITM など3文字コード)
+
+4. **検索日付が有効範囲内か確認** (実行日から120日以内)
 
 ### MapStructの生成エラー
 
