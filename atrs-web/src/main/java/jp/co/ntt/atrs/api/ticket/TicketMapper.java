@@ -23,7 +23,7 @@ import jp.co.ntt.atrs.domain.model.Passenger;
 import jp.co.ntt.atrs.domain.model.Reservation;
 import jp.co.ntt.atrs.domain.service.b2.TicketReserveDto;
 
-@Mapper
+@Mapper(componentModel = "spring")
 public interface TicketMapper {
 
     @Mapping(target = "reserveNo", source = "reserveNo")

@@ -69,7 +69,7 @@
                             </path>
                         </annotationProcessorPaths>
                         <compilerArgs>
-                            <arg>-Amapstruct.defaultComponentModel=spring</arg>
+                            <arg>-Amapstruct.verbose=true</arg>
                         </compilerArgs>
                     </configuration>
                 </plugin>
@@ -106,7 +106,7 @@
                     <configuration>
                         <deployables>
                             <deployable>
-                                <location>${target.dir}/target/atrs.war</location>
+                                <location>atrs-web/target/atrs.war</location>
                                 <type>war</type>
                                 <properties>
                                     <context>atrs</context>
@@ -179,6 +179,7 @@
         <org.apache.maven.plugins.maven-surefire-plugin.version>3.5.2</org.apache.maven.plugins.maven-surefire-plugin.version>
         <!-- == Dependency Versions == -->
         <postgresql.version>42.7.4</postgresql.version>
+        <mapstruct.version>1.5.5.Final</mapstruct.version>
         <!-- == Project Properties == -->
         <project.root.basedir>${project.basedir}</project.root.basedir>
         <encoding>UTF-8</encoding>

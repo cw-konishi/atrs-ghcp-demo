@@ -25,7 +25,7 @@ import jp.co.ntt.atrs.domain.model.Member;
 import jp.co.ntt.atrs.domain.model.Passenger;
 import jp.co.ntt.atrs.domain.model.Reservation;
 
-@Mapper
+@Mapper(componentModel = "spring")
 public interface B2Mapper {
 
     @Mapping(target = "flightName", source = "flightMaster.flightName")

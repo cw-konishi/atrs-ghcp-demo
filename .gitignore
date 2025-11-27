@@ -5,3 +5,4 @@ target
 *.doc*
 *.ppt*
 *.xls*
+.vscode/settings.json

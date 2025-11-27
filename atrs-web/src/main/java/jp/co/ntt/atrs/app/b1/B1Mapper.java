@@ -20,7 +20,7 @@ import org.mapstruct.Mapping;
 
 import jp.co.ntt.atrs.domain.service.b1.TicketSearchCriteriaDto;
 
-@Mapper
+@Mapper(componentModel = "spring")
 public interface B1Mapper {
 
     @Mapping(target = "departureAirportCd", source = "depAirportCd")

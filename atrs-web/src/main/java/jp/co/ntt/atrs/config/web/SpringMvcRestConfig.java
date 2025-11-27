@@ -46,7 +46,7 @@ import com.fasterxml.jackson.databind.util.StdDateFormat;
 /**
  * Configure SpringMVCRest.
  */
-@ComponentScan(basePackages = {"jp.co.ntt.atrs.api"})
+@ComponentScan(basePackages = {"jp.co.ntt.atrs.api", "jp.co.ntt.atrs.app.config"})
 @EnableAspectJAutoProxy
 @EnableWebMvc
 @Configuration

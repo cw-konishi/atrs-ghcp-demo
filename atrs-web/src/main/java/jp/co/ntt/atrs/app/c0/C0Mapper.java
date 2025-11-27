@@ -24,7 +24,7 @@ import jp.co.ntt.atrs.app.c1.MemberRegisterForm;
 import jp.co.ntt.atrs.app.c2.MemberUpdateForm;
 import jp.co.ntt.atrs.domain.model.Member;
 
-@Mapper
+@Mapper(componentModel = "spring")
 public interface C0Mapper {
 
     @Mapping(target = "tel1", ignore = true)
