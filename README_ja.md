@@ -351,6 +351,101 @@ mvn clean package -pl atrs-web -am -DskipTests
 
 JSP/CSS/JavaScriptの変更は、ブラウザをリロードするだけで反映されます。
 
+## テストとカバレッジ
+
+### テストの実行
+
+プロジェクトではJUnit 4、Mockito、AssertJを使用した単体テストを実装しています。
+
+```powershell
+# 全テスト実行
+mvn test
+
+# 特定モジュールのテスト実行
+mvn test -pl atrs-domain
+
+# 特定テストクラスの実行
+mvn test -Dtest=TicketSearchServiceImplTest -pl atrs-domain
+
+# テストスキップしてビルド
+mvn clean install -DskipTests
+```
+
+### テストカバレッジの測定
+
+JaCoCoを使用してコードカバレッジを測定できます。
+
+```powershell
+# テスト実行とカバレッジレポート生成
+mvn clean test -pl atrs-domain
+
+# カバレッジレポートの確認
+# ブラウザで以下のファイルを開く
+# atrs-domain/target/site/jacoco/index.html
+```
+
+**カバレッジレポートの見方**:
+
+- **Instruction Coverage**: 命令カバレッジ (実行されたバイトコードの割合)
+- **Branch Coverage**: 分岐カバレッジ (if文などの分岐網羅率)
+- **Line Coverage**: 行カバレッジ (実行された行の割合)
+- **Method Coverage**: メソッドカバレッジ (実行されたメソッドの割合)
+
+### テストの実装例
+
+**サービス層の単体テスト** (`atrs-domain/src/test/java`):
+
+```java
+@RunWith(MockitoJUnitRunner.class)
+public class TicketSearchServiceImplTest {
+    
+    @Mock
+    private FlightRepository flightRepository;
+    
+    @Mock
+    private RouteProvider routeProvider;
+    
+    @InjectMocks
+    private TicketSearchServiceImpl target;
+    
+    @Test
+    public void testSearchFlight_正常系() {
+        // Given: テストデータの準備
+        TicketSearchCriteriaDto criteria = new TicketSearchCriteriaDto();
+        criteria.setDepAirportCd("HND");
+        criteria.setArrAirportCd("ITM");
+        
+        // モックの設定
+        when(routeProvider.getRouteByAirportCd("HND", "ITM"))
+            .thenReturn(mockRoute);
+        when(flightRepository.findByVacantSeatSearchCriteria(any()))
+            .thenReturn(mockFlights);
+        
+        // When: テスト対象メソッドの実行
+        List<FlightVacantInfoDto> result = target.searchFlight(criteria);
+        
+        // Then: 結果の検証
+        assertThat(result).isNotNull();
+        assertThat(result).hasSize(3);
+        verify(flightRepository).findByVacantSeatSearchCriteria(any());
+    }
+}
+```
+
+**テスト作成のベストプラクティス**:
+
+1. **モックを活用**: 外部依存(DB、API)はMockitoでモック化
+2. **Given-When-Then パターン**: テストの構造を明確に
+3. **AssertJ**: 流暢なアサーションで可読性向上
+4. **カバレッジ目標**: 80%以上を目指す (ビジネスロジックは90%以上)
+5. **正常系・異常系**: 両方のテストケースを実装
+
+### テストデータの管理
+
+- **初期データ**: `mvn sql:execute -f atrs-initdb/pom.xml` で投入
+- **テスト用固定日付**: `ClockFactory` をモック化して決定的なテストを実現
+- **テスト分離**: 各テストは独立して実行可能に設計
+
 ## REST APIの使用例
 
 ### フライト検索API

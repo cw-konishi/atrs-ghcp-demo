@@ -280,21 +280,21 @@ public class ApiGlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
 ### テストの種類と配置
 
-**現在の状態**: このプロジェクトには既存のテストファイルが含まれていないため、以下は新規作成時の推奨パターン。
+**現在の実装状況**: `atrs-domain` モジュールに `TicketSearchServiceImplTest` を実装済み (14テストケース、93%カバレッジ達成)。
 
 ```
 atrs-domain/src/test/java/
 └── jp/co/ntt/atrs/domain/
     ├── service/
-    │   ├── b1/TicketSearchServiceImplTest.java  # サービス層単体テスト
-    │   └── b2/TicketReserveServiceImplTest.java
+    │   ├── b1/TicketSearchServiceImplTest.java  ✅ 実装済み (14テスト、93%カバレッジ)
+    │   └── b2/TicketReserveServiceImplTest.java  ← 今後追加予定
     └── repository/
-        └── flight/FlightRepositoryTest.java     # MyBatis リポジトリテスト
+        └── flight/FlightRepositoryTest.java      ← 今後追加予定
 
 atrs-web/src/test/java/
 └── jp/co/ntt/atrs/
-    ├── app/b1/TicketSearchControllerTest.java   # MVC コントローラーテスト
-    └── api/flight/FlightRestControllerTest.java # REST API テスト
+    ├── app/b1/TicketSearchControllerTest.java    ← 今後追加予定
+    └── api/flight/FlightRestControllerTest.java  ← 今後追加予定
 ```
 
 ### テスト実行コマンド
@@ -313,46 +313,175 @@ mvn test -pl atrs-domain
 mvn test -Dtest=TicketSearchServiceImplTest
 ```
 
-### 推奨テストフレームワーク
+### 使用しているテストフレームワーク
 
-- **JUnit**: 既に依存関係に含まれている (`junit:junit`)
-- **Mockito**: サービス層の依存コンポーネントをモック化
-- **Spring Test**: `@SpringBootTest`, `@WebMvcTest` などの統合テスト
-- **DBUnit**: データベーステスト用初期データ投入
+#### 単体テスト依存関係 (atrs-domain/pom.xml)
+
+```xml
+<dependency>
+    <groupId>junit</groupId>
+    <artifactId>junit</artifactId>
+    <version>4.13.2</version>
+    <scope>test</scope>
+</dependency>
+<dependency>
+    <groupId>org.mockito</groupId>
+    <artifactId>mockito-core</artifactId>
+    <version>5.8.0</version>
+    <scope>test</scope>
+</dependency>
+<dependency>
+    <groupId>org.assertj</groupId>
+    <artifactId>assertj-core</artifactId>
+    <version>3.25.1</version>
+    <scope>test</scope>
+</dependency>
+<dependency>
+    <groupId>org.springframework</groupId>
+    <artifactId>spring-test</artifactId>
+    <scope>test</scope>
+</dependency>
+```
+
+#### カバレッジ測定 (JaCoCo)
+
+```xml
+<plugin>
+    <groupId>org.jacoco</groupId>
+    <artifactId>jacoco-maven-plugin</artifactId>
+    <version>0.8.11</version>
+    <executions>
+        <execution>
+            <goals>
+                <goal>prepare-agent</goal>
+            </goals>
+        </execution>
+        <execution>
+            <id>report</id>
+            <phase>test</phase>
+            <goals>
+                <goal>report</goal>
+            </goals>
+        </execution>
+    </executions>
+</plugin>
+```
+
+**カバレッジレポート**: `atrs-domain/target/site/jacoco/index.html`
 
 ### テスト作成の基本パターン
 
-**サービス層テスト例**:
+**サービス層モック単体テスト** (推奨パターン - DB不要):
 
 ```java
-@RunWith(SpringJUnit4ClassRunner.class)
-@ContextConfiguration(classes = {ApplicationContextConfig.class})
+@RunWith(MockitoJUnitRunner.class)
 public class TicketSearchServiceImplTest {
     
-    @Inject
-    TicketSearchService ticketSearchService;
+    @Mock
+    private FlightRepository flightRepository;
+    
+    @Mock
+    private RouteProvider routeProvider;
+    
+    @Mock
+    private FareTypeProvider fareTypeProvider;
+    
+    @Mock
+    private FlightMasterProvider flightMasterProvider;
+    
+    @Mock
+    private BoardingClassProvider boardingClassProvider;
+    
+    @Mock
+    private TicketSharedService ticketSharedService;
+    
+    @Mock
+    private ClockFactory dateFactory;
+    
+    @InjectMocks
+    private TicketSearchServiceImpl target;  // テスト対象
+    
+    @Before
+    public void setUp() {
+        // 固定日時でテストを決定的に
+        Clock fixedClock = Clock.fixed(
+            Instant.parse("2025-11-27T00:00:00Z"), 
+            ZoneId.systemDefault()
+        );
+        when(dateFactory.tick()).thenReturn(fixedClock);
+    }
     
     @Test
-    public void testSearchFlight_正常系() {
+    public void testSearchFlight_正常系_基本検索() {
+        // Given: テストデータとモックの準備
+        TicketSearchCriteriaDto criteria = createSearchCriteria();
+        Route mockRoute = createMockRoute();
+        List<Flight> mockFlights = createMockFlights();
+        
+        when(routeProvider.getRouteByAirportCd("HND", "ITM"))
+            .thenReturn(mockRoute);
+        when(flightRepository.findByVacantSeatSearchCriteria(any()))
+            .thenReturn(mockFlights);
+        when(fareTypeProvider.getFareType(any()))
+            .thenReturn(mockFareType);
+        when(ticketSharedService.calculateBasicFare(anyInt(), any(), any()))
+            .thenReturn(10000);
+        when(ticketSharedService.calculateFare(anyInt(), anyInt()))
+            .thenReturn(8000);
+        
+        // When: テスト実行
+        List<FlightVacantInfoDto> result = target.searchFlight(criteria);
+        
+        // Then: AssertJで検証
+        assertThat(result).isNotNull();
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getFlightName()).isEqualTo("NTT001");
+        assertThat(result.get(0).getDepAirportName()).isEqualTo("東京(羽田)");
+        
+        // モック呼び出しの検証
+        verify(flightRepository).findByVacantSeatSearchCriteria(any());
+        verify(ticketSharedService).validateDepatureDate(any());
+    }
+    
+    @Test(expected = AtrsBusinessException.class)
+    public void testSearchFlight_異常系_路線が存在しない() {
         // Given
-        TicketSearchCriteriaDto criteria = new TicketSearchCriteriaDto();
-        criteria.setDepAirportCd("HND");
-        criteria.setArrAirportCd("ITM");
+        TicketSearchCriteriaDto criteria = createSearchCriteria();
+        when(routeProvider.getRouteByAirportCd("HND", "ITM"))
+            .thenReturn(null);  // 路線なし
         
-        // When
-        List<FlightVacantInfoDto> result = ticketSearchService.searchFlight(criteria);
-        
-        // Then
-        assertThat(result, is(notNullValue()));
-        assertThat(result.size(), is(greaterThan(0)));
+        // When/Then: 例外がスローされることを期待
+        target.searchFlight(criteria);
     }
 }
 ```
 
-**重要**: 
-- テストデータは `mvn sql:execute -f atrs-initdb/pom.xml` で投入されたものを使用
-- PostgreSQL が起動している必要がある
-- テスト用プロファイル設定は `src/test/resources` に配置
+**テストパターンのポイント**:
+
+1. **@RunWith(MockitoJUnitRunner.class)**: Mockitoの自動初期化
+2. **@Mock**: 依存コンポーネントをモック化 (DB不要)
+3. **@InjectMocks**: テスト対象にモックを自動注入
+4. **@Before setUp()**: 各テスト前の共通初期化 (固定Clock設定など)
+5. **Given-When-Then**: テスト構造を明確に分離
+6. **AssertJ**: `assertThat()` で流暢なアサーション
+7. **verify()**: モックメソッドの呼び出し検証
+8. **thenAnswer()**: 複雑な戻り値の動的生成
+
+**日付型の注意点**:
+- `java.util.Date` を使用 (実装に合わせる)
+- `java.sql.Date` は `toInstant()` が未サポートのため避ける
+- テストでは `Date.from(LocalDate.of(...).atStartOfDay(ZoneId.systemDefault()).toInstant())` で生成
+
+**複数フライトのテスト**:
+- 実装は `departureTime` をキーとして `LinkedHashMap` でグループ化
+- 異なる出発時刻のフライトは別々のエントリとして返される
+- 同じ出発時刻は1エントリに集約され、`fareTypes` マップに運賃種別が追加される
+- `FlightMasterProvider` のモック設定で各フライト名に対応した `FlightMaster` を返す必要がある
+
+**カバレッジ目標**:
+- サービス層: 90%以上
+- ドメインモデル: 80%以上
+- コントローラー層: 70%以上
 
 ## コード変更時の再ビルド
 
