@@ -39,6 +39,11 @@ public class FareTypeResource implements Serializable {
     private String fare;
 
     /**
+     * ドル建て運賃。
+     */
+    private String fareUsd;
+
+    /**
      * 空席数。
      */
     private Integer vacantNum;
@@ -73,6 +78,22 @@ public class FareTypeResource implements Serializable {
      */
     public void setFare(String fare) {
         this.fare = fare;
+    }
+
+    /**
+     * ドル建て運賃を取得する。
+     * @return ドル建て運賃
+     */
+    public String getFareUsd() {
+        return fareUsd;
+    }
+
+    /**
+     * ドル建て運賃を設定する。
+     * @param fareUsd ドル建て運賃
+     */
+    public void setFareUsd(String fareUsd) {
+        this.fareUsd = fareUsd;
     }
 
     /**
