@@ -198,8 +198,15 @@ public class TicketSearchServiceImpl implements TicketSearchService {
             // 運賃種別情報を設定
             FareType fareType = flight.getFareType();
             int fare = ticketSharedService.calculateFare(basicFare, fareType.getDiscountRate());
+            
+            // ドル換算
+            int fareUsd = ticketSharedService.convertYenToUsd(fare);
+            
             FareTypeVacantInfoDto fareTypeVacantInfo = new FareTypeVacantInfoDto(
-                    fareType.getFareTypeName(), fareFormatter.format(fare), flight.getVacantNum());
+                    fareType.getFareTypeName(), 
+                    fareFormatter.format(fare),
+                    "$" + fareFormatter.format(fareUsd),
+                    flight.getVacantNum());
 
             vacantInfo.addFareTypeVacantInfo(fareType.getFareTypeCd(), fareTypeVacantInfo);
         }
