@@ -661,4 +661,124 @@ public class TicketSearchServiceImplTest {
 
         return Arrays.asList(flight);
     }
+
+    // ==================== USD換算テストケース ====================
+
+    /**
+     * ドル換算の正常系テスト - 基本的な換算が正しく行われることを確認
+     */
+    @Test
+    public void testSearchFlight_正常系_ドル換算が正しい() {
+        // Given: 検索条件とモックの準備
+        TicketSearchCriteriaDto criteria = createSearchCriteria();
+        Route mockRoute = createMockRoute();
+        when(routeProvider.getRouteByAirportCd("HND", "ITM")).thenReturn(mockRoute);
+
+        List<Flight> mockFlights = createMockFlights();
+        when(flightRepository.findByVacantSeatSearchCriteria(any())).thenReturn(mockFlights);
+
+        setupMasterDataMocks();
+        when(ticketSharedService.calculateBasicFare(anyInt(), any(), any())).thenReturn(10000);
+        when(ticketSharedService.calculateFare(anyInt(), anyInt())).thenReturn(8000);
+
+        // ★ドル換算のモック: 8000円 ÷ 150 = 53.33... → 54ドル(切り上げ)
+        when(ticketSharedService.convertYenToUsd(8000)).thenReturn(54);
+
+        // When: 検索実行
+        List<FlightVacantInfoDto> result = target.searchFlight(criteria);
+
+        // Then: ドル換算結果の検証
+        assertThat(result).isNotNull();
+        assertThat(result).hasSize(1);
+
+        FlightVacantInfoDto flightInfo = result.get(0);
+        assertThat(flightInfo.getFareTypes()).isNotEmpty();
+
+        FareTypeVacantInfoDto fareInfo = flightInfo.getFareTypes().values().iterator().next();
+        assertThat(fareInfo.getFare()).isEqualTo("8,000"); // 円表示
+        assertThat(fareInfo.getFareUsd()).isEqualTo("$54"); // ドル表示
+
+        // モック呼び出し検証
+        verify(ticketSharedService).convertYenToUsd(8000);
+    }
+
+    /**
+     * ドル換算の正常系テスト - 複数の運賃種別でドル換算が正しく行われることを確認
+     */
+    @Test
+    public void testSearchFlight_正常系_複数運賃種別のドル換算() {
+        // Given: 複数運賃種別の検索条件
+        TicketSearchCriteriaDto criteria = createSearchCriteria();
+        Route mockRoute = createMockRoute();
+        when(routeProvider.getRouteByAirportCd("HND", "ITM")).thenReturn(mockRoute);
+
+        // 異なる運賃種別のフライト
+        List<Flight> mockFlights = createMockFlightsWithMultipleFareTypes();
+        when(flightRepository.findByVacantSeatSearchCriteria(any())).thenReturn(mockFlights);
+
+        setupMasterDataMocksForMultipleFareTypes();
+        when(ticketSharedService.calculateBasicFare(anyInt(), any(), any())).thenReturn(10000);
+
+        // 運賃種別ごとの運賃とドル換算
+        when(ticketSharedService.calculateFare(10000, 20)).thenReturn(8000); // RT: 20%割引
+        when(ticketSharedService.calculateFare(10000, 0)).thenReturn(10000); // OW: 割引なし
+        when(ticketSharedService.convertYenToUsd(8000)).thenReturn(54);  // $54
+        when(ticketSharedService.convertYenToUsd(10000)).thenReturn(67); // $67
+
+        // When: 検索実行
+        List<FlightVacantInfoDto> result = target.searchFlight(criteria);
+
+        // Then: 各運賃種別のドル換算を検証
+        assertThat(result).isNotNull();
+        assertThat(result).hasSize(1);
+
+        FlightVacantInfoDto flightInfo = result.get(0);
+        assertThat(flightInfo.getFareTypes()).hasSize(2);
+
+        // RT運賃の検証
+        FareTypeVacantInfoDto rtFare = flightInfo.getFareTypes().get(FareTypeCd.RT.name());
+        assertThat(rtFare.getFare()).isEqualTo("8,000");
+        assertThat(rtFare.getFareUsd()).isEqualTo("$54");
+
+        // OW運賃の検証
+        FareTypeVacantInfoDto owFare = flightInfo.getFareTypes().get(FareTypeCd.OW.name());
+        assertThat(owFare.getFare()).isEqualTo("10,000");
+        assertThat(owFare.getFareUsd()).isEqualTo("$67");
+
+        // モック呼び出し検証
+        verify(ticketSharedService).convertYenToUsd(8000);
+        verify(ticketSharedService).convertYenToUsd(10000);
+    }
+
+    /**
+     * ドル換算の正常系テスト - 端数切り上げの確認
+     */
+    @Test
+    public void testSearchFlight_正常系_ドル換算の端数切り上げ() {
+        // Given: 検索条件とモックの準備
+        TicketSearchCriteriaDto criteria = createSearchCriteria();
+        Route mockRoute = createMockRoute();
+        when(routeProvider.getRouteByAirportCd("HND", "ITM")).thenReturn(mockRoute);
+
+        List<Flight> mockFlights = createMockFlights();
+        when(flightRepository.findByVacantSeatSearchCriteria(any())).thenReturn(mockFlights);
+
+        setupMasterDataMocks();
+        when(ticketSharedService.calculateBasicFare(anyInt(), any(), any())).thenReturn(10000);
+        when(ticketSharedService.calculateFare(anyInt(), anyInt())).thenReturn(15050); // 端数あり
+
+        // ★ドル換算のモック: 15050円 ÷ 150 = 100.33... → 101ドル(切り上げ)
+        when(ticketSharedService.convertYenToUsd(15050)).thenReturn(101);
+
+        // When: 検索実行
+        List<FlightVacantInfoDto> result = target.searchFlight(criteria);
+
+        // Then: 端数切り上げの検証
+        assertThat(result).isNotNull();
+        FareTypeVacantInfoDto fareInfo = result.get(0).getFareTypes().values().iterator().next();
+        assertThat(fareInfo.getFare()).isEqualTo("15,050");
+        assertThat(fareInfo.getFareUsd()).isEqualTo("$101"); // 切り上げ確認
+
+        verify(ticketSharedService).convertYenToUsd(15050);
+    }
 }
