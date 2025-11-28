@@ -179,6 +179,7 @@
                              data-boarding-class-cd="<@- data[i].boardingClassCd @>"
                              <@= flightClass.vacantNum > 0 ? '' : 'disabled="disabled"' @>><br>
                       &yen;<span class="fare"><@- flightClass.fare @></span><br>
+                      <span class="fare-usd text-muted small"><@- flightClass.fareUsd @></span><br>
                       <@= flightClass.vacantNum > 10 ? '&nbsp;' : flightClass.vacantNum > 0 ? '<span class="label label-warning">残り' + flightClass.vacantNum + '席</span>' : '<span class="label label-default">満席</span>' || '-' @>
                     </label>
                     <@ } else {@>
