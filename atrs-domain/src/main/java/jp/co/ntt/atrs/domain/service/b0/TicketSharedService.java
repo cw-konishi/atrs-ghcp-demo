@@ -82,9 +82,16 @@ public interface TicketSharedService {
     int calculateFare(int basicFare, int discountRate);
 
     /**
+     * 円建て運賃をドル建て運賃に変換する。
+     * @param yenFare 円建て運賃
+     * @return ドル建て運賃(整数切り上げ)
+     */
+    int convertYenToUsd(int yenFare);
+
+    /**
      * フライト情報の存在をチェックする。
      * @param flight フライト情報
-     * @return 存在：true 不存在：false
+     * @return 存在:true 不存在:false
      */
     boolean existsFlight(Flight flight);
 }

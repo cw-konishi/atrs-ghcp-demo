@@ -69,6 +69,12 @@ public class TicketSharedServiceImpl implements TicketSharedService {
     private int limitDay;
 
     /**
+     * 為替レート(1 USD = X JPY)。
+     */
+    @Value("${atrs.exchangeRate}")
+    private double exchangeRate;
+
+    /**
      * 日付、時刻取得インターフェース。
      */
     @Inject
@@ -344,6 +350,16 @@ public class TicketSharedServiceImpl implements TicketSharedService {
 
         // 運賃の100円未満を切上げて返却
         return FareUtil.ceilFare(fare);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public int convertYenToUsd(int yenFare) {
+        Assert.isTrue(yenFare >= 0, "yenFare must be 0 or higher.");
+        // ドル換算(整数切り上げ)
+        return (int) Math.ceil(yenFare / exchangeRate);
     }
 
     /**
