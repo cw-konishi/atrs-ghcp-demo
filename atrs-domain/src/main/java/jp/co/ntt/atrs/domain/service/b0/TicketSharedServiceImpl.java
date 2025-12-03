@@ -75,6 +75,12 @@ public class TicketSharedServiceImpl implements TicketSharedService {
     private double exchangeRate;
 
     /**
+     * 為替レート(1 HKD = X JPY)。
+     */
+    @Value("${atrs.exchangeRateHkd}")
+    private double exchangeRateHkd;
+
+    /**
      * 日付、時刻取得インターフェース。
      */
     @Inject
@@ -360,6 +366,16 @@ public class TicketSharedServiceImpl implements TicketSharedService {
         Assert.isTrue(yenFare >= 0, "yenFare must be 0 or higher.");
         // ドル換算(整数切り上げ)
         return (int) Math.ceil(yenFare / exchangeRate);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public int convertYenToHkd(int yenFare) {
+        Assert.isTrue(yenFare >= 0, "yenFare must be 0 or higher.");
+        // 香港ドル換算(整数切り上げ)
+        return (int) Math.ceil(yenFare / exchangeRateHkd);
     }
 
     /**

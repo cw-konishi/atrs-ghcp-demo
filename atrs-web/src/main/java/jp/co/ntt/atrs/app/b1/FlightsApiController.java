@@ -107,9 +107,7 @@ public class FlightsApiController {
 
         // 空席照会
         TicketSearchCriteriaDto searchCriteriaDto = beanMapper.map(flightSearchCriteriaForm);
-        List<FlightVacantInfoDto> flights = ticketSearchService.searchFlight(searchCriteriaDto);
-
-        return flights;
+        return ticketSearchService.searchFlight(searchCriteriaDto);
     }
 
     /**

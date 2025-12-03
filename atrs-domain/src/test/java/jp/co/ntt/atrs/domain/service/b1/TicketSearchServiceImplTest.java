@@ -26,6 +26,7 @@ import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -780,5 +781,101 @@ public class TicketSearchServiceImplTest {
         assertThat(fareInfo.getFareUsd()).isEqualTo("$101"); // 切り上げ確認
 
         verify(ticketSharedService).convertYenToUsd(15050);
+    }
+
+    /**
+     * 香港ドル換算の正常系テスト - HKD換算が正しく行われることを確認
+     */
+    @Test
+    public void testSearchFlight_正常系_HKD換算が正しい() {
+        // Given: 基本的な検索条件とモックデータの設定
+        TicketSearchCriteriaDto criteria = createSearchCriteria();
+        Route mockRoute = createMockRoute();
+        when(routeProvider.getRouteByAirportCd("HND", "ITM")).thenReturn(mockRoute);
+
+        List<Flight> mockFlights = createMockFlights();
+        when(flightRepository.findByVacantSeatSearchCriteria(any())).thenReturn(mockFlights);
+
+        setupMasterDataMocks();
+        when(ticketSharedService.calculateBasicFare(anyInt(), any(), any())).thenReturn(10000);
+        when(ticketSharedService.calculateFare(anyInt(), anyInt())).thenReturn(8000);
+
+        // ★ドル換算のモック: 8000円 ÷ 150 = 53.33... → 54ドル(切り上げ)
+        when(ticketSharedService.convertYenToUsd(8000)).thenReturn(54);
+        
+        // ★香港ドル換算のモック: 8000円 ÷ 19.35 = 413.43... → 414 HKD(切り上げ)
+        when(ticketSharedService.convertYenToHkd(8000)).thenReturn(414);
+
+        // When: 検索実行
+        List<FlightVacantInfoDto> result = target.searchFlight(criteria);
+
+        // Then: 香港ドル換算結果の検証
+        assertThat(result).isNotNull();
+        assertThat(result).hasSize(1);
+
+        FlightVacantInfoDto flightInfo = result.get(0);
+        assertThat(flightInfo.getFareTypes()).isNotEmpty();
+
+        FareTypeVacantInfoDto fareInfo = flightInfo.getFareTypes().values().iterator().next();
+        assertThat(fareInfo.getFare()).isEqualTo("8,000"); // 円表示
+        assertThat(fareInfo.getFareUsd()).isEqualTo("$54"); // ドル表示
+        assertThat(fareInfo.getFareHkd()).isEqualTo("HK$414"); // 香港ドル表示
+
+        // モック呼び出し検証
+        verify(ticketSharedService).convertYenToUsd(8000);
+        verify(ticketSharedService).convertYenToHkd(8000);
+    }
+
+    /**
+     * 香港ドル換算の正常系テスト - 複数運賃種別でHKD換算が正しく行われることを確認
+     */
+    @Test
+    public void testSearchFlight_正常系_複数運賃種別のHKD換算() {
+        // Given: 複数運賃種別の検索条件
+        TicketSearchCriteriaDto criteria = createSearchCriteria();
+        Route mockRoute = createMockRoute();
+        when(routeProvider.getRouteByAirportCd("HND", "ITM")).thenReturn(mockRoute);
+
+        // 異なる運賃種別のフライト
+        List<Flight> mockFlights = createMockFlightsWithMultipleFareTypes();
+        when(flightRepository.findByVacantSeatSearchCriteria(any())).thenReturn(mockFlights);
+
+        setupMasterDataMocksForMultipleFareTypes();
+        when(ticketSharedService.calculateBasicFare(anyInt(), any(), any())).thenReturn(10000);
+
+        // 運賃種別ごとの運賃とドル・香港ドル換算
+        when(ticketSharedService.calculateFare(10000, 20)).thenReturn(8000); // RT: 20%割引
+        when(ticketSharedService.calculateFare(10000, 0)).thenReturn(10000); // OW: 割引なし
+        when(ticketSharedService.convertYenToUsd(8000)).thenReturn(54);  // $54
+        when(ticketSharedService.convertYenToUsd(10000)).thenReturn(67); // $67
+        when(ticketSharedService.convertYenToHkd(8000)).thenReturn(414);  // HK$414
+        when(ticketSharedService.convertYenToHkd(10000)).thenReturn(517); // HK$517
+
+        // When: 検索実行
+        List<FlightVacantInfoDto> result = target.searchFlight(criteria);
+
+        // Then: 複数運賃種別の香港ドル換算結果検証
+        assertThat(result).isNotNull();
+        assertThat(result).hasSize(1);
+
+        FlightVacantInfoDto flightInfo = result.get(0);
+        Map<String, FareTypeVacantInfoDto> fareTypes = flightInfo.getFareTypes();
+        assertThat(fareTypes).hasSize(2);
+
+        // RT(往復割引)の検証
+        FareTypeVacantInfoDto rtFare = fareTypes.get("RT");
+        assertThat(rtFare.getFare()).isEqualTo("8,000");
+        assertThat(rtFare.getFareUsd()).isEqualTo("$54");
+        assertThat(rtFare.getFareHkd()).isEqualTo("HK$414");
+
+        // OW(片道)の検証
+        FareTypeVacantInfoDto owFare = fareTypes.get("OW");
+        assertThat(owFare.getFare()).isEqualTo("10,000");
+        assertThat(owFare.getFareUsd()).isEqualTo("$67");
+        assertThat(owFare.getFareHkd()).isEqualTo("HK$517");
+
+        // モック呼び出し検証
+        verify(ticketSharedService, times(2)).convertYenToUsd(anyInt());
+        verify(ticketSharedService, times(2)).convertYenToHkd(anyInt());
     }
 }

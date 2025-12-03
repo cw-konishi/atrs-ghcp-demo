@@ -39,5 +39,28 @@ $ mvn cargo:run -P default -f atrs-web/pom.xml
 
 ### Web access
 
-Access <http://localhost:8080/atrs/>.
+**Web UI** (with USD display): <http://localhost:8080/atrs/>
+
+**REST API** (Flight search with USD): `GET http://localhost:8080/atrs/api/flights`
+
+Example:
+```bash
+curl "http://localhost:8080/atrs/api/flights?depAirportCd=HND&arrAirportCd=ITM&depDate=2025-12-01&boardingClassCd=N&flightType=RT"
+```
+
+Response includes fare in both JPY and USD (exchange rate: 1 USD = 148.5 JPY):
+```json
+[
+  {
+    "flightName": "NTT001",
+    "fareTypes": {
+      "RT": {
+        "fare": "8,000",
+        "fareUsd": "$54",
+        "vacantNum": 50
+      }
+    }
+  }
+]
+```
 

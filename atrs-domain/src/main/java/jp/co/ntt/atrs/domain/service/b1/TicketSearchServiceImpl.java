@@ -202,10 +202,14 @@ public class TicketSearchServiceImpl implements TicketSearchService {
             // ドル換算
             int fareUsd = ticketSharedService.convertYenToUsd(fare);
             
+            // 香港ドル換算
+            int fareHkd = ticketSharedService.convertYenToHkd(fare);
+            
             FareTypeVacantInfoDto fareTypeVacantInfo = new FareTypeVacantInfoDto(
                     fareType.getFareTypeName(), 
                     fareFormatter.format(fare),
                     "$" + fareFormatter.format(fareUsd),
+                    "HK$" + fareFormatter.format(fareHkd),
                     flight.getVacantNum());
 
             vacantInfo.addFareTypeVacantInfo(fareType.getFareTypeCd(), fareTypeVacantInfo);

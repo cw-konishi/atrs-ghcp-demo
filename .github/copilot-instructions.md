@@ -69,14 +69,16 @@ atrs/                                    # 親 POM (TERASOLUNA 5.10.0)
 │       │   │       │   ├── AuthLoginService.java
 │       │   │       │   └── AuthLoginServiceImpl.java
 │       │   │       ├── b0/              # チケット共通サービス
-│       │   │       │   ├── TicketSharedService.java
-│       │   │       │   └── TicketSharedServiceImpl.java
+│       │   │       │   ├── TicketSharedService.java        # 共通処理インターフェース
+│       │   │       │   ├── TicketSharedServiceImpl.java    # 実装 (運賃計算、USD変換)
+│       │   │       │   └── InvalidFlightException.java     # フライト不正例外
 │       │   │       ├── b1/              # 空席照会サービス
 │       │   │       │   ├── TicketSearchService.java
 │       │   │       │   ├── TicketSearchServiceImpl.java
 │       │   │       │   ├── TicketSearchCriteriaDto.java # 検索条件DTO
 │       │   │       │   ├── FlightVacantInfoDto.java     # 検索結果DTO
-│       │   │       │   └── FareTypeVacantInfoDto.java   # 運賃種別情報DTO
+│       │   │       │   ├── FareTypeVacantInfoDto.java   # 運賃種別情報DTO (fareUsdフィールド含む)
+│       │   │       │   └── FlightNotFoundException.java # フライト検索例外
 │       │   │       ├── b2/              # チケット予約サービス
 │       │   │       │   ├── TicketReserveService.java
 │       │   │       │   ├── TicketReserveServiceImpl.java
@@ -109,6 +111,8 @@ atrs/                                    # 親 POM (TERASOLUNA 5.10.0)
 │   └── src/main/
 │       ├── java/jp/co/ntt/atrs/
 │       │   ├── app/                     # Spring MVC コントローラー (JSPビュー)
+│       │   │   ├── a0/                  # 共通機能
+│       │   │   │   └── ErrorResultDto.java      # エラーレスポンス用DTO
 │       │   │   ├── a1/                  # ログイン機能
 │       │   │   │   ├── AuthLoginController.java
 │       │   │   │   └── LoginForm.java
@@ -116,6 +120,9 @@ atrs/                                    # 親 POM (TERASOLUNA 5.10.0)
 │       │   │   │   ├── TicketSearchController.java
 │       │   │   │   ├── TicketSearchHelper.java   # ビジネスロジック補助
 │       │   │   │   ├── TicketSearchForm.java     # フォームオブジェクト
+│       │   │   │   ├── FlightsApiController.java # REST API (GET /api/flights)
+│       │   │   │   ├── FlightSearchCriteriaForm.java # REST API用フォーム
+│       │   │   │   ├── FlightSearchCriteriaValidator.java # バリデーター
 │       │   │   │   └── B1Mapper.java             # MapStruct DTO変換
 │       │   │   ├── b2/                  # チケット予約機能
 │       │   │   │   ├── TicketReserveController.java
@@ -339,22 +346,44 @@ b1/
 - `Helper`: 画面特有のビジネスロジック (リスト変換、ページング等)
 - `Mapper` (MapStruct): DTO変換専用
 
-#### REST API コントローラー (`atrs-web/src/main/java/.../api/`)
+#### REST API コントローラー (`atrs-web/src/main/java/.../api/` と `.../app/{機能}/`)
 
+**パターン5-1: 独立したREST APIパッケージ** (将来の拡張用):
 ```java
-// パターン5: REST API
-{リソース名}/
+api/{リソース名}/
 ├── {リソース名}RestController.java  // @RestController
-├── {リソース名}Mapper.java          // MapStruct変換
-├── {リソース名}Resource.java        // レスポンスDTO
-└── {リソース名}Query.java           // リクエストDTO
+├── {リソース名}Mapper.java          # MapStruct変換
+├── {リソース名}Resource.java        # レスポンスDTO
+└── {リソース名}Query.java           # リクエストDTO
+```
 
-// 例: フライトAPI
-flight/
-├── FlightRestController.java
-├── FlightMapper.java
-├── FlightResource.java             // JSON出力
-└── FlightSearchQuery.java          // クエリパラメータ
+**パターン5-2: 機能パッケージ内のREST API** (現行実装):
+```java
+app/b1/  # チケット検索機能
+├── TicketSearchController.java     # @Controller (JSP)
+├── FlightsApiController.java       # @Controller + @ResponseBody (REST)
+├── FlightSearchCriteriaForm.java   # REST API用フォーム
+├── FlightSearchCriteriaValidator.java
+└── B1Mapper.java                   # MapStruct変換
+```
+
+**例: FlightsApiController** (GET `/api/flights`):
+```java
+@Controller
+@RequestMapping("api")
+public class FlightsApiController {
+    @RequestMapping(value = "flights", method = RequestMethod.GET)
+    @ResponseBody
+    public List<FlightVacantInfoDto> getFlights(
+            @Validated FlightSearchCriteriaForm form) {
+        // ドメインサービスを呼び出し、USD変換済みのDTOを返却
+    }
+    
+    @ExceptionHandler(FlightNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    @ResponseBody
+    public ErrorResultDto handleFlightNotFoundException(...) { ... }
+}
 ```
 
 **REST APIの命名規則**:
@@ -469,21 +498,96 @@ psql -U postgres -d atrs -c "SELECT MIN(departure_date), MAX(departure_date) FRO
 
 ## REST API 規約
 
+### 現行実装: FlightsApiController
+
+**エンドポイント**: `GET /atrs/api/flights`
+
 ```java
-@RestController
-@RequestMapping("/flight")
-public class FlightRestController {
-    @RequestMapping(method = RequestMethod.GET)
-    @ResponseStatus(HttpStatus.OK)
-    public List<FlightResource> getFlights(@Validated FlightSearchQuery query) {
+@Controller
+@RequestMapping("api")
+public class FlightsApiController {
+    @Inject
+    TicketSearchService ticketSearchService;
+    
+    @Inject
+    B1Mapper beanMapper;
+    
+    @RequestMapping(value = "flights", method = RequestMethod.GET)
+    @ResponseBody
+    public List<FlightVacantInfoDto> getFlights(
+            @Validated FlightSearchCriteriaForm form) {
         // MapStruct で DTO 変換
-        TicketSearchCriteriaDto dto = beanMapper.map(query);
+        TicketSearchCriteriaDto dto = beanMapper.map(form);
+        // USD変換済みのFlightVacantInfoDtoを返却
         return ticketSearchService.searchFlight(dto);
     }
+    
+    // 例外ハンドリング
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ResponseBody
+    public ErrorResultDto handleMethodArgumentNotValidException(...) { ... }
+    
+    @ExceptionHandler(FlightNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    @ResponseBody
+    public ErrorResultDto handleFlightNotFoundException(...) { ... }
 }
 ```
 
-**エンドポイント例**: `GET /atrs/api/v1/flight?depAirportCd=HND&arrAirportCd=ITM&depDate=2025-12-01`
+**リクエスト例**:
+```bash
+GET /atrs/api/flights?depAirportCd=HND&arrAirportCd=ITM&depDate=2025-12-01&boardingClassCd=N&flightType=RT
+```
+
+**レスポンス例** (JSON):
+```json
+[
+  {
+    "flightName": "NTT001",
+    "depAirportName": "東京(羽田)",
+    "arrAirportName": "大阪(伊丹)",
+    "depTime": "09:00",
+    "arrTime": "10:30",
+    "depDate": "2025-12-01",
+    "boardingClassCd": "N",
+    "fareTypes": {
+      "RT": {
+        "fareTypeName": "往復",
+        "fare": "8,000",
+        "fareUsd": "$54",
+        "vacantNum": 50
+      },
+      "OW": {
+        "fareTypeName": "片道",
+        "fare": "10,000",
+        "fareUsd": "$67",
+        "vacantNum": 50
+      }
+    }
+  }
+]
+```
+
+### USD表示機能
+
+**実装場所**:
+- `TicketSharedService.convertYenToUsd(int yenFare)`: 円→ドル変換ロジック
+- `TicketSearchServiceImpl.searchFlight()`: 検索結果にUSD運賃を追加
+- `FareTypeVacantInfoDto.fareUsd`: ドル建て運賃フィールド (例: "$54")
+
+**変換ロジック** (`TicketSharedServiceImpl`):
+```java
+public int convertYenToUsd(int yenFare) {
+    // 固定レート: 1 USD = 148.5 JPY
+    return (int) Math.ceil(yenFare / 148.5);
+}
+```
+
+**注意事項**:
+- 為替レートは固定値 (148.5円/ドル)
+- 切り上げ処理 (Math.ceil)
+- ドル表示は「$」記号付きで整形 (例: "$54")
 
 ## トラブルシューティング
 
@@ -797,6 +901,23 @@ public class TicketSearchServiceImplTest {
 - サービス層: 90%以上
 - ドメインモデル: 80%以上
 - コントローラー層: 70%以上
+
+**USD変換テストの例** (`TicketSearchServiceImplTest`):
+```java
+@Test
+public void testSearchFlight_正常系_USD表示() {
+    // Given: USD変換モックの設定
+    when(ticketSharedService.convertYenToUsd(8000)).thenReturn(54);
+    
+    // When: フライト検索実行
+    List<FlightVacantInfoDto> result = target.searchFlight(criteria);
+    
+    // Then: USD表示の検証
+    FareTypeVacantInfoDto fareInfo = result.get(0).getFareTypes().get("RT");
+    assertThat(fareInfo.getFareUsd()).isEqualTo("$54");
+    verify(ticketSharedService).convertYenToUsd(8000);
+}
+```
 
 ## コード変更時の再ビルド
 

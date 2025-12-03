@@ -89,6 +89,13 @@ public interface TicketSharedService {
     int convertYenToUsd(int yenFare);
 
     /**
+     * 円建て運賃を香港ドル建て運賃に変換する。
+     * @param yenFare 円建て運賃
+     * @return 香港ドル建て運賃(整数切り上げ)
+     */
+    int convertYenToHkd(int yenFare);
+
+    /**
      * フライト情報の存在をチェックする。
      * @param flight フライト情報
      * @return 存在:true 不存在:false

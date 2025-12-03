@@ -47,6 +47,11 @@ public class FareTypeVacantInfoDto implements Serializable {
     private final String fareUsd;
 
     /**
+     * 香港ドル建て運賃。
+     */
+    private final String fareHkd;
+
+    /**
      * 空席数。
      */
     private final Integer vacantNum;
@@ -56,12 +61,14 @@ public class FareTypeVacantInfoDto implements Serializable {
      * @param fareTypeName 運賃種別名
      * @param fare 運賃
      * @param fareUsd ドル建て運賃
+     * @param fareHkd 香港ドル建て運賃
      * @param vacantNum 空席数
      */
-    public FareTypeVacantInfoDto(String fareTypeName, String fare, String fareUsd, Integer vacantNum) {
+    public FareTypeVacantInfoDto(String fareTypeName, String fare, String fareUsd, String fareHkd, Integer vacantNum) {
         this.fareTypeName = fareTypeName;
         this.fare = fare;
         this.fareUsd = fareUsd;
+        this.fareHkd = fareHkd;
         this.vacantNum = vacantNum;
     }
 
@@ -87,6 +94,14 @@ public class FareTypeVacantInfoDto implements Serializable {
      */
     public String getFareUsd() {
         return fareUsd;
+    }
+
+    /**
+     * 香港ドル建て運賃を取得する。
+     * @return 香港ドル建て運賃
+     */
+    public String getFareHkd() {
+        return fareHkd;
     }
 
     /**
